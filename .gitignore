@@ -1,0 +1,22 @@
+cat > .gitignore <<EOF
+# Binaries
+ramp
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Coverage
+*.out
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+EOF
