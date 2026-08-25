@@ -10,6 +10,28 @@ import (
 )
 
 var (
+	killPromptStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")).
+			Bold(true)
+
+	killSuccessStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("42")). // green
+				Bold(true)
+
+	killFailStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("204")). // red/pink
+			Bold(true)
+
+	killCancelStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Italic(true)
+
+	killLabelStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("86")).
+			Bold(true)
+)
+
+var (
 	// Section headers: bold, same grey family as analyse's labelStyle
 	// but bold to read as a heading, matching sectionHeaderStyle's
 	// existing role in output.go.
@@ -112,4 +134,34 @@ func nonEmpty(s, fallback string) string {
 		return fallback
 	}
 	return s
+}
+
+// PrintKillPrompt renders the confirmation line before a kill, with
+// the process label in cyan (matching portNumberStyle's family) and
+// the port itself calling out clearly.
+func PrintKillPrompt(label string, pid, port int) {
+	fmt.Printf("Kill %s (pid %s) on port %d? [y/N] ",
+		killLabelStyle.Render(label),
+		killPromptStyle.Render(fmt.Sprintf("%d", pid)),
+		port,
+	)
+}
+
+// PrintKillResult renders the outcome of a Terminate call.
+func PrintKillResult(killed bool, message string) {
+	if killed {
+		fmt.Println(killSuccessStyle.Render("✓ " + message))
+		return
+	}
+	fmt.Println(killFailStyle.Render("✗ " + message))
+}
+
+// PrintKillCancelled renders a cancelled kill.
+func PrintKillCancelled() {
+	fmt.Println(killCancelStyle.Render("Cancelled."))
+}
+
+// PrintKillNotFound renders when no process is found on the port.
+func PrintKillNotFound(port int) {
+	fmt.Println(killCancelStyle.Render(fmt.Sprintf("Nothing found listening on port %d", port)))
 }
