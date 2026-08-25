@@ -77,3 +77,15 @@ func TestDarwinScanner_ListeningPorts(t *testing.T) {
 		t.Errorf("expected port %d in %v (own process should show as listening)", port, info.Ports)
 	}
 }
+
+func TestDarwinScanner_Cmdline(t *testing.T) {
+	s := newOSScanner()
+	info, err := s.Enrich(context.Background(), os.Getpid())
+	if err != nil {
+		t.Fatalf("Enrich(self) failed: %v", err)
+	}
+	if len(info.Cmdline) == 0 {
+		t.Fatalf("Cmdline is empty, expected at least the exec path/argv[0]")
+	}
+	t.Logf("self cmdline: %v", info.Cmdline)
+}

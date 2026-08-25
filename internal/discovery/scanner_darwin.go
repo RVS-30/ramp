@@ -9,6 +9,7 @@ package discovery
 #include <libproc.h>
 #include <sys/proc_info.h>
 #include <sys/socket.h>
+#include <sys/sysctl.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -92,6 +93,7 @@ func (d *darwinScanner) Enrich(ctx context.Context, pid int) (ProcInfo, error) {
 	}
 
 	info.Ports = listeningTCPPorts(pid)
+	info.Cmdline = processArgs(pid)
 
 	return info, nil
 }
@@ -150,4 +152,82 @@ func listeningTCPPorts(pid int) []int {
 	}
 
 	return ports
+}
+
+// processArgs returns the command-line arguments a process was
+// started with, via KERN_PROCARGS2. Returns nil if unavailable
+// (permission denied on another user's process, or the process
+// vanished) — this is expected, not an error condition.
+func processArgs(pid int) []string {
+	mib := []C.int{C.CTL_KERN, C.KERN_PROCARGS2, C.int(pid)}
+
+	var size C.size_t
+	ret := C.sysctl(&mib[0], 3, nil, &size, nil, 0)
+	if ret != 0 || size == 0 {
+		return nil
+	}
+
+	buf := C.malloc(size)
+	if buf == nil {
+		return nil
+	}
+	defer C.free(buf)
+
+	ret = C.sysctl(&mib[0], 3, buf, &size, nil, 0)
+	if ret != 0 {
+		return nil
+	}
+
+	raw := C.GoBytes(buf, C.int(size))
+	return parseProcArgs2(raw)
+}
+
+// parseProcArgs2 decodes the KERN_PROCARGS2 buffer layout: a leading
+// 4-byte argc, then the exec path, then NUL-separated argv strings
+// (padded with extra NULs before argv[0] starts), then the
+// environment block which we ignore.
+func parseProcArgs2(raw []byte) []string {
+	if len(raw) < 4 {
+		return nil
+	}
+
+	argc := int(raw[0]) | int(raw[1])<<8 | int(raw[2])<<16 | int(raw[3])<<24
+	if argc <= 0 {
+		return nil
+	}
+
+	rest := raw[4:]
+
+	// Skip the exec path (NUL-terminated), then skip any additional
+	// NUL padding before argv[0] begins.
+	idx := indexByte(rest, 0)
+	if idx < 0 {
+		return nil
+	}
+	rest = rest[idx:]
+	for len(rest) > 0 && rest[0] == 0 {
+		rest = rest[1:]
+	}
+
+	var args []string
+	for i := 0; i < argc && len(rest) > 0; i++ {
+		end := indexByte(rest, 0)
+		if end < 0 {
+			args = append(args, string(rest))
+			break
+		}
+		args = append(args, string(rest[:end]))
+		rest = rest[end+1:]
+	}
+
+	return args
+}
+
+func indexByte(b []byte, c byte) int {
+	for i, v := range b {
+		if v == c {
+			return i
+		}
+	}
+	return -1
 }
