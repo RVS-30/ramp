@@ -29,6 +29,9 @@ var (
 	killLabelStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("86")).
 			Bold(true)
+
+	pidStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240"))
 )
 
 var (
@@ -50,7 +53,7 @@ var (
 	// valueStyle in the analyse output.
 	portNameStyle = lipgloss.NewStyle().
 			Bold(true).
-			Width(26)
+			Width(20)
 
 	// Stack/framework label: orange, matching descriptionStyle's hue
 	// (214) so it visually pairs with how analyse shows Framework.
@@ -70,6 +73,10 @@ var (
 
 	emptySectionStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("240")).
+				Italic(true)
+
+	supervisorWarnStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("214")).
 				Italic(true)
 )
 
@@ -96,10 +103,11 @@ func printDevPortsSection(ports []discovery.DevPort) {
 	}
 
 	for _, p := range ports {
-		fmt.Printf("  %s %s %s\n",
+		fmt.Printf("  %s %s %s %s\n",
 			portNumberStyle.Render(fmt.Sprintf("%d", p.Port)),
 			portNameStyle.Render(p.Project),
 			portStackStyle.Render(nonEmpty(p.Stack, "—")),
+			pidStyle.Render(fmt.Sprintf("pid %d", p.PID)),
 		)
 	}
 }
@@ -113,10 +121,15 @@ func printDatabasesSection(dbs []discovery.DatabaseMatch) {
 	}
 
 	for _, db := range dbs {
-		fmt.Printf("  %s %s %s\n",
+		pidLabel := "—"
+		if db.PID != 0 {
+			pidLabel = fmt.Sprintf("pid %d", db.PID)
+		}
+		fmt.Printf("  %s %s %s %s\n",
 			portNumberStyle.Render(fmt.Sprintf("%d", db.Port)),
 			portNameStyle.Render(db.Name),
 			portSourceStyle.Render(db.Source),
+			pidStyle.Render(pidLabel),
 		)
 	}
 }
@@ -127,6 +140,14 @@ func printContainersSection(containers []discovery.Container) {
 	for _, c := range containers {
 		fmt.Printf("  %s\n", portMetaStyle.Render(c.Name))
 	}
+}
+
+// PrintSupervisorWarning tells the user a process is supervised and
+// will likely restart automatically after being killed.
+func PrintSupervisorWarning(supervisor string) {
+	fmt.Println(supervisorWarnStyle.Render(
+		fmt.Sprintf("⚠ this process is supervised by %s and may restart automatically", supervisor),
+	))
 }
 
 func nonEmpty(s, fallback string) string {

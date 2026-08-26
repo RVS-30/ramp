@@ -42,11 +42,16 @@ for confirmation. Run without a port to pick interactively from a list.`,
 				os.Exit(1)
 			}
 
+			var supervisor string
 			var found bool
-			pid, label, found = findPIDForPort(result, port)
+			pid, label, supervisor, found = findPIDForPort(result, port)
 			if !found {
 				output.PrintKillNotFound(port)
 				return
+			}
+
+			if supervisor != "" {
+				output.PrintSupervisorWarning(supervisor)
 			}
 
 			output.PrintKillPrompt(label, pid, port)
@@ -71,6 +76,9 @@ for confirmation. Run without a port to pick interactively from a list.`,
 			}
 
 			pid, label = chosen.PID, chosen.Label
+			if chosen.Supervisor != "" {
+				output.PrintSupervisorWarning(chosen.Supervisor)
+			}
 			output.PrintKillPrompt(label, pid, chosen.Port)
 			if !confirm() {
 				output.PrintKillCancelled()
@@ -94,7 +102,7 @@ func buildKillCandidates(result *discovery.DiscoveryResult) []tui.KillCandidate 
 
 	for _, dp := range result.DevPorts {
 		candidates = append(candidates, tui.KillCandidate{
-			PID: dp.PID, Port: dp.Port, Label: dp.Project, Stack: dp.Stack,
+			PID: dp.PID, Port: dp.Port, Label: dp.Project, Stack: dp.Stack, Supervisor: dp.Supervisor,
 		})
 	}
 	for _, db := range result.Databases {
@@ -112,18 +120,18 @@ func buildKillCandidates(result *discovery.DiscoveryResult) []tui.KillCandidate 
 // findPIDForPort looks up which process/database owns a given port
 // within an already-scanned result, so kill never has to re-scan —
 // it reuses the exact same data ramp ports just showed the user.
-func findPIDForPort(result *discovery.DiscoveryResult, port int) (pid int, label string, found bool) {
+func findPIDForPort(result *discovery.DiscoveryResult, port int) (pid int, label string, supervisor string, found bool) {
 	for _, dp := range result.DevPorts {
 		if dp.Port == port {
-			return dp.PID, dp.Project, true
+			return dp.PID, dp.Project, dp.Supervisor, true
 		}
 	}
 	for _, db := range result.Databases {
 		if db.Port == port {
-			return db.PID, db.Name, true
+			return db.PID, db.Name, "", true
 		}
 	}
-	return 0, "", false
+	return 0, "", "", false
 }
 
 func confirm() bool {

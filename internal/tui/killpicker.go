@@ -12,10 +12,11 @@ import (
 // decoupled from discovery.DevPort/DatabaseMatch so this package has
 // zero dependency on discovery's internals.
 type KillCandidate struct {
-	PID   int
-	Port  int
-	Label string
-	Stack string
+	PID        int
+	Port       int
+	Label      string
+	Stack      string
+	Supervisor string
 }
 
 var (

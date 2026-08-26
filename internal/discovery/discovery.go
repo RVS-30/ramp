@@ -16,16 +16,28 @@ import (
 // attributed to a project and stack.
 
 type DevPort struct {
-	Port    int
-	Project string
-	Stack   string
-	PID     int
+	Port       int
+	Project    string
+	Stack      string
+	PID        int
+	Supervisor string // "" if not supervised, otherwise e.g. "nodemon"
 }
 
 // DiscoveryResult is the full output of a Scan() run.
 type DiscoveryResult struct {
 	DevPorts  []DevPort
 	Databases []DatabaseMatch
+}
+
+// knownSupervisors are process names that automatically restart
+// their children on exit. If a process we're about to show/kill has
+// one of these as its direct parent, the user should know killing
+// the child alone likely won't stop it for long.
+var knownSupervisors = map[string]bool{
+	"nodemon":     true,
+	"pm2":         true,
+	"ts-node-dev": true,
+	"forever":     true,
 }
 
 // NewScanner returns the Scanner implementation for the current OS.
@@ -73,12 +85,14 @@ func Scan(ctx context.Context, scanner Scanner) (*DiscoveryResult, error) {
 		}
 
 		name, stack := projectNameAndStack(resolver, p)
+		supervisor := detectSupervisor(parents.Parent(p))
 		for _, port := range p.Ports {
 			devPorts = append(devPorts, DevPort{
-				Port:    port,
-				Project: name,
-				Stack:   stack,
-				PID:     p.PID,
+				Port:       port,
+				Project:    name,
+				Stack:      stack,
+				PID:        p.PID,
+				Supervisor: supervisor,
 			})
 		}
 	}
@@ -174,4 +188,27 @@ func stackLabel(info *analyser.ProjectInfo) string {
 		return info.Framework
 	}
 	return info.Language
+}
+
+// detectSupervisor returns the supervisor's display name if parent
+// looks like a process supervisor, or "" otherwise. Pure function,
+// no I/O — same testing philosophy as classify.go.
+func detectSupervisor(parent *ProcInfo) string {
+	if parent == nil {
+		return ""
+	}
+	base := filepath.Base(parent.Exe)
+	// nodemon/pm2/etc are typically invoked as
+	// ".../node_modules/.bin/nodemon" or similar — match on the
+	// cmdline's script name too, since Exe is often just "node".
+	if knownSupervisors[base] {
+		return base
+	}
+	for _, arg := range parent.Cmdline {
+		name := filepath.Base(arg)
+		if knownSupervisors[name] {
+			return name
+		}
+	}
+	return ""
 }

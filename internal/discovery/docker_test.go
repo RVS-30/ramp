@@ -71,3 +71,29 @@ func TestQueryContainers_NoDaemon_ReturnsNilNotError(t *testing.T) {
 	ctx := contextWithTimeout(t)
 	_ = QueryContainers(ctx) // no daemon required to reach this line
 }
+
+func TestDetectSupervisor(t *testing.T) {
+	tests := []struct {
+		name   string
+		parent *ProcInfo
+		want   string
+	}{
+		{"nil parent", nil, ""},
+		{"nodemon by exe name", &ProcInfo{Exe: "/usr/local/bin/nodemon"}, "nodemon"},
+		{
+			"nodemon invoked via node with script arg",
+			&ProcInfo{Exe: "/usr/local/bin/node", Cmdline: []string{"node", "/path/node_modules/.bin/nodemon", "src/index.js"}},
+			"nodemon",
+		},
+		{"plain shell, no supervisor", &ProcInfo{Exe: "/bin/zsh"}, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := detectSupervisor(tt.parent)
+			if got != tt.want {
+				t.Errorf("detectSupervisor() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
